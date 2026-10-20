@@ -4,7 +4,7 @@
 
 Shared expenses for a household: who paid, who benefited, and who owes whom, correct to the cent.
 
-> **Status:** in development. The money model and split rules are done. See
+> **Status:** in development. The money model, split rules, and ledger with balances are done. See
 > [`docs/design.md`](docs/design.md) for the plan and [`PROGRESS.md`](PROGRESS.md) for status.
 
 ## Setup
