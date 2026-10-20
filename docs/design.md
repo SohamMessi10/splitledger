@@ -37,9 +37,12 @@ the scope. Each group uses one currency. No real bank or payment integration.
 - **Balances sum to zero** across the group, after any sequence of expenses and reimbursements.
 - **A reimbursement** raises the payer's balance and lowers the receiver's by the same amount.
 - **Suggested transfers settle everyone.** Applying them leaves every balance at exactly zero.
-- **Settlement claims stay honest.** The greedy method used here keeps the number of transfers
-  small, but it does not always find the minimum (finding the true minimum is NP-hard), so the
-  docs say exactly that.
+- **Settlement claims stay honest.** The fewest transfers equals the number of members with a
+  nonzero balance minus the largest number of separate zero-sum groups they can be split into.
+  Finding that partition is NP-hard in general, so SplitLedger computes it exactly for up to 12
+  members with a nonzero balance (dynamic programming over subsets) and uses a greedy method
+  above that. Greedy never needs more than n - 1 transfers but is not always minimal; the tests
+  include a concrete case where it uses 4 transfers and the exact method uses 3.
 
 ## Money model
 
