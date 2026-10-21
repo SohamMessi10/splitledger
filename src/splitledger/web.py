@@ -140,7 +140,8 @@ def describe(entry: Expense | Reimbursement | Reversal) -> str:
 def get_store(request: Request) -> Iterator[LedgerStore]:
     """One connection per request: SQLite connections can't be shared across the
     worker threads FastAPI uses for these endpoints."""
-    store = LedgerStore.open(request.app.state.db_path)
+    # validate=False: every endpoint loads (and so validates) the history itself.
+    store = LedgerStore.open(request.app.state.db_path, validate=False)
     try:
         yield store
     finally:
@@ -303,7 +304,7 @@ def create_app(db_path: str | Path, allowed_hosts: list[str] | None = None) -> F
     def _expense_from_form(request: Request, form) -> Response:
         values = {key: form.get(key, "") for key in form.keys()}
         chosen = form.getlist("member")
-        with LedgerStore.open(db_path) as store:
+        with LedgerStore.open(db_path, validate=False) as store:
             try:
                 total = parse_amount(str(form.get("amount", "")).strip())
                 kind = str(form.get("split_type", "equal"))
@@ -326,7 +327,7 @@ def create_app(db_path: str | Path, allowed_hosts: list[str] | None = None) -> F
         return _back(f"Added {entry.description}.")
 
     def _reimbursement_from_form(request: Request, form) -> Response:
-        with LedgerStore.open(db_path) as store:
+        with LedgerStore.open(db_path, validate=False) as store:
             try:
                 amount = parse_amount(str(form.get("amount", "")).strip())
                 entry = store.add_reimbursement(
@@ -337,7 +338,7 @@ def create_app(db_path: str | Path, allowed_hosts: list[str] | None = None) -> F
         return _back(f"Recorded {entry.sender} paying {entry.receiver} {format_cents(entry.amount)}.")
 
     def _reversal_from_form(request: Request, entry_id: int, form) -> Response:
-        with LedgerStore.open(db_path) as store:
+        with LedgerStore.open(db_path, validate=False) as store:
             try:
                 store.add_reversal(entry_id, str(form.get("reason", "")))
             except USER_ERRORS as exc:

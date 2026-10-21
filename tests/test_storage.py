@@ -295,3 +295,15 @@ def test_concurrent_writers_wait_instead_of_failing(path):
     assert errors == []
     assert [(e.entry_id, e.sender) for e in a.load().entries] == [(1, "ben"), (2, "cal")]
     a.close()
+
+
+def test_open_without_validation_still_validates_on_load(path):
+    # The web app opens with validate=False because every request calls load() itself.
+    with LedgerStore.create(path, MEMBERS) as store:
+        store.add_expense("groceries", "ana", 1000, split_equal(1000, ["ana", "ben"]))
+    raw(path).execute("UPDATE shares SET cents = 400 WHERE member_id = 'ben'")
+    with pytest.raises(StoreError, match="stored entry 1 is invalid"):
+        LedgerStore.open(path)  # default: checked immediately
+    with LedgerStore.open(path, validate=False) as store:  # opens...
+        with pytest.raises(StoreError, match="stored entry 1 is invalid"):
+            store.load()  # ...but reading the history still catches the damage

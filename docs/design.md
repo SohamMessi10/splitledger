@@ -62,7 +62,7 @@ ledger core (pure functions)   money.py, splits.py, balances.py, settle.py
         |
 storage                        SQLite through the standard-library sqlite3 module
         |
-interface                      chosen in the interface milestone (small web UI or API)
+interface                      FastAPI: household page (HTML forms) and JSON API
 ```
 
 The core has no I/O, so every rule is tested directly and exhaustively. Storage and the
@@ -173,9 +173,11 @@ another site (CSRF); it grants no CORS; and templates escape all text, so a desc
 2. Ledger model: expenses, reimbursements, and balances.
 3. Settlement suggestions.
 4. SQLite persistence.
-5. Corrections (reversal entries) and CSV export.
-6. Interface.
-7. CI, README with a four-roommate demo, and limitations.
+5. Corrections (reversal entries), schema upgrade, and CSV export.
+6. Web interface: household page and JSON API.
+7. README with a four-roommate demo, screenshots, measured performance, and limitations.
+
+All seven are complete; see `PROGRESS.md`.
 
 ## Out of scope for the MVP
 

@@ -64,3 +64,25 @@ def test_installed_command_runs(tmp_path):
     )
     assert result.returncode == 0
     assert "created" in result.stdout
+
+
+def test_demo_household_matches_the_readme(tmp_path):
+    # The README quotes these numbers; this keeps them true if the demo or the math changes.
+    import importlib.util
+    from pathlib import Path
+
+    from splitledger import format_cents, settle
+
+    script = Path(__file__).resolve().parent.parent / "examples" / "seed_demo.py"
+    spec = importlib.util.spec_from_file_location("seed_demo", script)
+    seed_demo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(seed_demo)
+
+    with seed_demo.seed(tmp_path / "demo.db") as store:
+        ledger = store.load()
+    balances = {m: format_cents(c) for m, c in ledger.balances().items()}
+    assert balances == {"ana": "1218.92", "ben": "-436.78", "cal": "-481.07", "dee": "-301.07"}
+    assert [str(t) for t in settle(ledger.balances()).transfers] == [
+        "ben pays ana 436.78", "cal pays ana 481.07", "dee pays ana 301.07",
+    ]
+    assert len(ledger.entries) == 7 and ledger.reversed_ids() == {4}

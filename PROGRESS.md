@@ -77,6 +77,20 @@
 - Dependencies pinned to releases at least two weeks old (FastAPI 0.142.2, Starlette 1.7.0,
   Pydantic 2.13.5, uvicorn 0.54.0, python-multipart 0.0.32, httpx2 2.13.1).
 
+### Milestone 7: README, demo, and final review
+- README for a first-time reader: the problem, a four-roommate demo (`examples/seed_demo.py`)
+  with screenshots, features, setup, usage, the JSON API, architecture, design decisions,
+  security, testing story, measured performance, and limitations.
+- Every example in the README was checked against real output, and a test now keeps the demo's
+  numbers true.
+- Measuring performance found that each web request replayed the history twice;
+  `LedgerStore.open(..., validate=False)` for per-request connections halved request time at
+  10,000 entries (160 ms to 74 ms), with a test that load() still validates.
+
+**Project status: MVP complete.** All design invariants are tested, and the definition of done
+from the brief is met: reproducible setup, a working user flow, tests for the core risks,
+a demo with made-up data, useful errors, a README with tradeoffs, and a list of limitations.
+
 ## Commands verified
 
 | Where | Python | Command | Result |
@@ -89,10 +103,13 @@
 | Claude's Linux workspace | 3.11, 3.13, 3.14 | `python -m pytest`, dev and ci profiles | 212 passed (milestone 5) |
 | Claude's Linux workspace | 3.11, 3.13, 3.14 | `python -m pytest -W error::DeprecationWarning` | 265 passed (milestone 6) |
 | Claude's Linux workspace | Chromium via Playwright | live server, 3 widths, light and dark | no overflow |
+| GitHub Actions | 3.11–3.14, macOS 3.13 | runs #1–#4 | passed |
+| Claude's Linux workspace | 3.13 | `python -m pytest` | 267 passed (milestone 7) |
 
 ## Next
 
-- Milestone 7: README with a four-roommate demo and screenshots, limitations, resume notes.
+- Optional: adding and removing members, recurring expenses, history paging, balance snapshots.
+- Next project in the brief: Reliable Job Runner.
 
 ## Concepts to review
 - Why money is stored as integer cents, not floats.

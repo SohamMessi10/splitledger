@@ -106,8 +106,13 @@ class LedgerStore:
         return cls(conn, path)
 
     @classmethod
-    def open(cls, path: str | Path) -> LedgerStore:
-        """Open an existing household file and check that it is a valid SplitLedger file."""
+    def open(cls, path: str | Path, *, validate: bool = True) -> LedgerStore:
+        """Open an existing household file and check that it is a valid SplitLedger file.
+
+        validate=True also replays the whole history now, so a damaged file fails
+        immediately. Callers that call load() right away anyway (each web request)
+        pass False to avoid replaying twice; load() runs the same validation.
+        """
         path = Path(path)
         if not path.is_file():
             # sqlite3.connect would silently create a new, empty database here.
@@ -133,7 +138,8 @@ class LedgerStore:
                 conn.close()
                 raise
         store = cls(conn, path)
-        store.load()  # fail now, with a clear message, if the stored history is damaged
+        if validate:
+            store.load()  # fail now, with a clear message, if the stored history is damaged
         return store
 
     def close(self) -> None:
