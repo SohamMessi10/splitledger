@@ -68,6 +68,62 @@ interface                      chosen in the interface milestone (small web UI o
 The core has no I/O, so every rule is tested directly and exhaustively. Storage and the
 interface are thin layers on top.
 
+## Storage
+
+One SQLite file holds one household. It stores entries, never balances.
+
+| Table | Columns | Rules enforced by the database |
+|---|---|---|
+| `members` | `member_id` | Primary key; non-empty, no surrounding spaces. |
+| `entries` | `entry_id`, `kind`, `amount`, `from_member`, `to_member`, `description`, `reverses`, `recorded_at` | `amount` is a positive integer; members must exist; an expense has a description and no receiver; a reimbursement has a receiver different from the sender; a reversal has a reason, no amount or members, and points to an earlier entry. `reverses` is UNIQUE, so an entry can be reversed only once. |
+| `shares` | `entry_id`, `member_id`, `cents` | One row per member per expense; `cents` is a non-negative integer; entry and member must exist. |
+
+All tables are `STRICT`, so SQLite rejects a value of the wrong type instead of storing it.
+Foreign keys are switched on for every connection, since SQLite leaves them off by default.
+
+"Shares add up to the total" spans several rows, so a CHECK constraint can't express it.
+Instead, loading replays every stored entry through the ledger's validation, and a damaged
+file is reported rather than producing wrong balances.
+
+Writes use `BEGIN IMMEDIATE`: a writer takes the lock before reading the next entry id, so two
+programs writing at once wait for each other instead of failing with "database is locked".
+Opening a missing path is an error. Plain `sqlite3.connect` would silently create an empty
+database there.
+
+### Corrections
+
+History is never edited or deleted. A mistake is cancelled by a **reversal**: a new entry whose
+effect on every balance is exactly the original's, negated, with a required reason. An entry can
+be reversed once, and a reversal can't be reversed (record the original item again instead).
+This keeps a complete audit trail, the way accounting ledgers handle corrections.
+
+### Schema versions and upgrades
+
+The file's schema version is stored in `PRAGMA user_version`.
+
+| Version | Change |
+|---|---|
+| 1 | members, entries (expense, reimbursement), shares |
+| 2 | entries gain the `reversal` kind and the `reverses` column |
+
+Opening an older file upgrades it in place. Before changing anything, SplitLedger saves a copy
+named `<file>.v<old version>.bak` using SQLite's online backup API, and refuses to upgrade if
+that backup name is already taken. SQLite can't change CHECK constraints in place, so the
+`entries` table is rebuilt following SQLite's documented procedure: foreign keys off, then in
+one transaction create `new_entries`, copy, drop `entries`, rename, and run
+`PRAGMA foreign_key_check`, then commit. A failure at any step rolls back to the old version.
+The upgrade is tested on a real version 1 file written by the version 1 code
+(`tests/fixtures/house_v1.db`).
+
+### CSV export
+
+One row per member per entry, with that entry's effect on that member's balance. Summing
+`balance_change` per member reproduces the app's balances, so the export can be checked in a
+spreadsheet. Text cells starting with `=`, `+`, `-`, `@`, tab, or carriage return get a leading
+apostrophe, so a description like `=HYPERLINK(...)` can't run as a formula when the file is
+opened (CSV injection). The file is UTF-8 with a byte-order mark, so Excel shows accented names
+correctly, and it is written atomically.
+
 ## Tech choices
 
 | Choice | Why |

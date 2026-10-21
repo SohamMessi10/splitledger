@@ -54,7 +54,27 @@ class Reimbursement:
         return {self.sender: self.amount, self.receiver: -self.amount}
 
 
-Entry = Expense | Reimbursement
+@dataclass(frozen=True)
+class Reversal:
+    """Cancels an earlier expense or reimbursement without deleting it.
+
+    History is never edited: a mistake stays visible, followed by the entry that
+    undoes it and the reason. The effects are exactly the original's, negated.
+    """
+
+    entry_id: int
+    original: Expense | Reimbursement
+    reason: str
+
+    @property
+    def reverses(self) -> int:
+        return self.original.entry_id
+
+    def effects(self) -> dict[str, int]:
+        return {member: -change for member, change in self.original.effects().items()}
+
+
+Entry = Expense | Reimbursement | Reversal
 
 
 @dataclass(frozen=True)
@@ -120,6 +140,30 @@ class Ledger:
         self._entries.append(entry)
         return entry
 
+    def add_reversal(self, entry_id: int, reason: str) -> Reversal:
+        """Cancel entry `entry_id`. Each entry can be reversed at most once."""
+        reason = self._check_text(reason, "reason", required=True)
+        original = self.entry(entry_id)
+        if isinstance(original, Reversal):
+            raise LedgerError(
+                f"entry {entry_id} is itself a reversal; record the original item again instead"
+            )
+        if entry_id in self.reversed_ids():
+            raise LedgerError(f"entry {entry_id} has already been reversed")
+        entry = Reversal(self._next_id(), original, reason)
+        self._entries.append(entry)
+        return entry
+
+    def entry(self, entry_id: int) -> Entry:
+        """The entry with this id."""
+        if isinstance(entry_id, bool) or not isinstance(entry_id, int) or not 1 <= entry_id <= len(self._entries):
+            raise LedgerError(f"there is no entry {entry_id!r}")
+        return self._entries[entry_id - 1]
+
+    def reversed_ids(self) -> set[int]:
+        """Ids of entries that have been cancelled by a reversal."""
+        return {e.reverses for e in self._entries if isinstance(e, Reversal)}
+
     def balances(self) -> dict[str, int]:
         """Each member's balance in cents, ordered by member id. Always sums to zero."""
         totals = {member: 0 for member in self.members}
@@ -173,12 +217,16 @@ class Ledger:
 
 
 def _involves(entry: Entry, member: str) -> bool:
+    if isinstance(entry, Reversal):
+        return _involves(entry.original, member)
     if isinstance(entry, Expense):
         return member == entry.payer or member in entry.split
     return member in (entry.sender, entry.receiver)
 
 
 def _describe(entry: Entry, member: str) -> str:
+    if isinstance(entry, Reversal):
+        return f"reversal of entry {entry.reverses} ({entry.reason}): {_describe(entry.original, member)}"
     if isinstance(entry, Expense):
         share = entry.split.get(member, 0)
         if member == entry.payer:
@@ -193,4 +241,4 @@ def _describe(entry: Entry, member: str) -> str:
     return f"received {format_cents(entry.amount)} from {entry.sender}{note}"
 
 
-__all__ = ["Entry", "Expense", "Ledger", "LedgerError", "Reimbursement", "StatementLine"]
+__all__ = ["Entry", "Expense", "Ledger", "LedgerError", "Reimbursement", "Reversal", "StatementLine"]
