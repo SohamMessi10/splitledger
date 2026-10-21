@@ -62,6 +62,21 @@
   row was really rejected by the foreign key, and a rollback test passed only because closing the
   connection discarded the work. Both tests now isolate the rule they check.
 
+### Milestone 6: Web interface
+- `splitledger init`, `serve` and `export` commands; `serve` listens only on this computer.
+- FastAPI JSON API (strict bodies, amounts as strings, 422/404/500 errors) and a household page
+  built from HTML forms (balances, settle up with "Mark as paid", add expense, record payment,
+  history with reverse). Errors keep what was typed.
+- Local-only security: trusted Host check, cross-site Origin refusal, no CORS, escaped output.
+- Checked in a real browser at desktop, tablet and phone widths in light and dark mode: no
+  horizontal scrolling and nothing spilling out of a card (measured in the page). Screenshots
+  showed stretched cards and an overflowing fieldset, both fixed.
+- Bugs found while running the real server: a dependency alias defined inside `create_app` was
+  invisible to FastAPI under `from __future__ import annotations`, and the async form handlers
+  used a SQLite connection created on another thread. Both fixed and covered by tests.
+- Dependencies pinned to releases at least two weeks old (FastAPI 0.142.2, Starlette 1.7.0,
+  Pydantic 2.13.5, uvicorn 0.54.0, python-multipart 0.0.32, httpx2 2.13.1).
+
 ## Commands verified
 
 | Where | Python | Command | Result |
@@ -72,10 +87,12 @@
 | Claude's Linux workspace | 3.13 | `python -m pytest`, dev and ci profiles | 137 passed (milestone 3) |
 | Claude's Linux workspace | 3.11, 3.13, 3.14 (SQLite 3.45–3.53) | `python -m pytest` | 168 passed (milestone 4) |
 | Claude's Linux workspace | 3.11, 3.13, 3.14 | `python -m pytest`, dev and ci profiles | 212 passed (milestone 5) |
+| Claude's Linux workspace | 3.11, 3.13, 3.14 | `python -m pytest -W error::DeprecationWarning` | 265 passed (milestone 6) |
+| Claude's Linux workspace | Chromium via Playwright | live server, 3 widths, light and dark | no overflow |
 
 ## Next
 
-- Milestone 6: an interface for the household (decide between a small web UI and an API first).
+- Milestone 7: README with a four-roommate demo and screenshots, limitations, resume notes.
 
 ## Concepts to review
 - Why money is stored as integer cents, not floats.
@@ -93,3 +110,6 @@
 - Append-only history and reversal entries instead of edits.
 - Schema migrations: version numbers, backups, SQLite's table-rebuild procedure.
 - CSV injection and how to neutralize it.
+- HTTP API design: status codes, strict validation, why money is sent as strings.
+- CSRF, DNS rebinding, and why a local app still needs protection.
+- Post/redirect/get; sync vs async handlers and thread rules for SQLite.

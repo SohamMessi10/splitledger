@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SplitLedger</title>
+  <style>
+    :root {
+      --bg: #f7f6f3; --panel: #ffffff; --text: #1d1d1f; --muted: #5f6368; --line: #e3e1dc;
+      --accent: #2f5d50; --accent-text: #ffffff; --owed: #1f6f43; --owes: #a33a2c;
+      --error-bg: #fdecea; --error-text: #8a1f11; --notice-bg: #e8f3ec; --notice-text: #1f5135;
+      --radius: 10px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #15171a; --panel: #1e2125; --text: #ececec; --muted: #a0a4aa; --line: #33373d;
+        --accent: #7fbfa8; --accent-text: #0f1a16; --owed: #7fd1a0; --owes: #f0948a;
+        --error-bg: #3a1d1a; --error-text: #f6b8ae; --notice-bg: #17301f; --notice-text: #a6dbb7;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text);
+           font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    h1 { font-size: 1.6rem; margin: 0; }
+    h2 { font-size: 1.1rem; margin: 0 0 12px; }
+    a { color: var(--accent); }
+    .layout { display: grid; gap: 16px; margin-top: 16px; align-items: start;
+              grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+    .col { display: grid; gap: 16px; align-content: start; min-width: 0; }
+    @media (max-width: 760px) {
+      /* One column on phones: overview first, then the forms, then the history. */
+      .layout { grid-template-columns: minmax(0, 1fr); }
+      .col { display: contents; }
+      #balances { order: 1; } #settle { order: 2; } #add-expense { order: 3; }
+      #record-payment { order: 4; } #history { order: 5; }
+    }
+    section { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    td, th { padding: 6px 0; text-align: left; border-bottom: 1px solid var(--line); }
+    td.amount, th.amount { text-align: right; font-variant-numeric: tabular-nums; }
+    .owed { color: var(--owed); } .owes { color: var(--owes); }
+    .muted { color: var(--muted); font-size: 0.9rem; }
+    .message { border-radius: var(--radius); padding: 10px 14px; margin-top: 16px; }
+    .error { background: var(--error-bg); color: var(--error-text); }
+    .notice { background: var(--notice-bg); color: var(--notice-text); }
+    label { display: block; font-weight: 600; margin: 10px 0 4px; }
+    input[type=text], select { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px;
+                               background: var(--bg); color: var(--text); font: inherit; }
+    fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 12px 0 0; padding: 8px 12px; }
+    legend { font-weight: 600; padding: 0 4px; }
+    .member-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 72px) minmax(0, 84px); gap: 8px; align-items: center; padding: 4px 0; }
+    .member-row label { margin: 0; font-weight: 400; }
+    .member-row input[type=text] { padding: 4px 6px; min-width: 0; }
+    fieldset { min-width: 0; }
+    .choices label { display: inline-flex; gap: 6px; margin-right: 14px; font-weight: 400; }
+    button { margin-top: 14px; padding: 9px 16px; border: 0; border-radius: 6px; font: inherit; font-weight: 600;
+             background: var(--accent); color: var(--accent-text); cursor: pointer; }
+    button.small { margin: 0; padding: 4px 10px; font-size: 0.85rem; }
+    button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    ul.entries { list-style: none; margin: 0; padding: 0; }
+    ul.entries li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .reversed { text-decoration: line-through; color: var(--muted); }
+    details summary { cursor: pointer; color: var(--accent); font-size: 0.9rem; }
+    .inline { display: flex; gap: 8px; margin-top: 6px; }
+    .inline input { flex: 1; }
+    .empty { color: var(--muted); font-style: italic; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SplitLedger</h1>
+    <span class="muted">Amounts are in dollars and cents, like 12.34 &middot; <a href="/export.csv">Export CSV</a> &middot; <a href="/docs">API docs</a></span>
+  </header>
+
+  {% if error %}<div class="message error" role="alert">{{ error }}</div>{% endif %}
+  {% if notice %}<div class="message notice" role="status">{{ notice }}</div>{% endif %}
+
+  <div class="layout">
+  <div class="col">
+    <section id="balances" aria-labelledby="balances-heading">
+      <h2 id="balances-heading">Balances</h2>
+      <table>
+        <thead><tr><th scope="col">Member</th><th scope="col" class="amount">Balance</th></tr></thead>
+        <tbody>
+        {% for member, cents, text in balances %}
+          <tr>
+            <td>{{ member }}</td>
+            <td class="amount {% if cents > 0 %}owed{% elif cents < 0 %}owes{% endif %}">
+              {% if cents > 0 %}is owed {{ text }}{% elif cents < 0 %}owes {{ text[1:] }}{% else %}settled{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section id="settle" aria-labelledby="settle-heading">
+      <h2 id="settle-heading">Settle up</h2>
+      {% if transfers %}
+        <p class="muted">
+          {% if method == "exact" %}The fewest payments that settle everyone.{% else %}A short list of payments that settles everyone (large group: not guaranteed to be the fewest).{% endif %}
+        </p>
+        <ul class="entries">
+        {% for sender, receiver, amount in transfers %}
+          <li>
+            <form method="post" action="/reimbursements" class="inline" style="justify-content: space-between; align-items: center;">
+              <span><strong>{{ sender }}</strong> pays <strong>{{ receiver }}</strong> {{ amount }}</span>
+              <input type="hidden" name="sender" value="{{ sender }}">
+              <input type="hidden" name="receiver" value="{{ receiver }}">
+              <input type="hidden" name="amount" value="{{ amount }}">
+              <input type="hidden" name="note" value="settle up">
+              <button type="submit" class="small">Mark as paid</button>
+            </form>
+          </li>
+        {% endfor %}
+        </ul>
+      {% else %}
+        <p class="empty">Everyone is settled.</p>
+      {% endif %}
+    </section>
+
+    <section id="history" aria-labelledby="history-heading">
+      <h2 id="history-heading">History</h2>
+      {% if entries %}
+        <ul class="entries">
+        {% for entry_id, text, is_reversed, is_reversal in entries %}
+          <li>
+            <span class="muted">#{{ entry_id }}</span>
+            <span class="{% if is_reversed %}reversed{% endif %}">{{ text }}</span>
+            {% if is_reversed %}<span class="muted">(reversed)</span>{% endif %}
+            {% if not is_reversed and not is_reversal %}
+              <details>
+                <summary>Reverse this entry</summary>
+                <form method="post" action="/entries/{{ entry_id }}/reverse" class="inline">
+                  <input type="text" name="reason" required maxlength="200" aria-label="Reason for reversing entry {{ entry_id }}" placeholder="Why? e.g. entered twice">
+                  <button type="submit" class="small">Reverse</button>
+                </form>
+              </details>
+            {% endif %}
+          </li>
+        {% endfor %}
+        </ul>
+      {% else %}
+        <p class="empty">No entries yet. Add the first expense above.</p>
+      {% endif %}
+    </section>
+  </div>
+  <div class="col">
+    <section id="add-expense" aria-labelledby="expense-heading">
+      <h2 id="expense-heading">Add an expense</h2>
+      <form method="post" action="/expenses">
+        <label for="description">What was it?</label>
+        <input type="text" id="description" name="description" required maxlength="200" value="{{ form.description or '' }}" placeholder="Groceries">
+
+        <label for="payer">Who paid?</label>
+        <select id="payer" name="payer">
+          {% for m in members %}<option value="{{ m }}" {% if form.payer == m %}selected{% endif %}>{{ m }}</option>{% endfor %}
+        </select>
+
+        <label for="amount">Total</label>
+        <input type="text" id="amount" name="amount" required inputmode="decimal" value="{{ form.amount or '' }}" placeholder="84.30" aria-describedby="amount-help">
+        <div id="amount-help" class="muted">Up to two decimal places, no currency sign.</div>
+
+        <fieldset class="choices">
+          <legend>How is it split?</legend>
+          {% set kind = form.split_type or "equal" %}
+          <label><input type="radio" name="split_type" value="equal" {% if kind == "equal" %}checked{% endif %}> Equally</label>
+          <label><input type="radio" name="split_type" value="shares" {% if kind == "shares" %}checked{% endif %}> By shares</label>
+          <label><input type="radio" name="split_type" value="exact" {% if kind == "exact" %}checked{% endif %}> Exact amounts</label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Who shares it?</legend>
+          <div class="member-row muted"><span>Member (equal)</span><span>Shares</span><span>Exact</span></div>
+          {% for m in members %}
+            {% set checked = (not form) or (m in (form.member or [])) %}
+            <div class="member-row">
+              <label><input type="checkbox" name="member" value="{{ m }}" {% if checked %}checked{% endif %}> {{ m }}</label>
+              <input type="text" name="share_{{ m }}" inputmode="numeric" aria-label="Shares for {{ m }}" value="{{ form['share_' ~ m] or '1' }}">
+              <input type="text" name="exact_{{ m }}" inputmode="decimal" aria-label="Exact amount for {{ m }}" value="{{ form['exact_' ~ m] or '' }}" placeholder="0.00">
+            </div>
+          {% endfor %}
+          <div class="muted">Equally uses the ticked members. Shares and exact use the numbers you enter.</div>
+        </fieldset>
+        <button type="submit">Add expense</button>
+      </form>
+    </section>
+
+    <section id="record-payment" aria-labelledby="payment-heading">
+      <h2 id="payment-heading">Record a payment</h2>
+      <form method="post" action="/reimbursements">
+        <label for="sender">Who paid?</label>
+        <select id="sender" name="sender">
+          {% for m in members %}<option value="{{ m }}" {% if form.r_sender == m %}selected{% endif %}>{{ m }}</option>{% endfor %}
+        </select>
+        <label for="receiver">Paid to</label>
+        <select id="receiver" name="receiver">
+          {% for m in members %}<option value="{{ m }}" {% if form.r_receiver == m or (not form.r_receiver and loop.index == 2) %}selected{% endif %}>{{ m }}</option>{% endfor %}
+        </select>
+        <label for="r_amount">Amount</label>
+        <input type="text" id="r_amount" name="amount" required inputmode="decimal" value="{{ form.r_amount or '' }}" placeholder="21.07">
+        <label for="note">Note (optional)</label>
+        <input type="text" id="note" name="note" maxlength="200" value="{{ form.r_note or '' }}" placeholder="Venmo">
+        <button type="submit">Record payment</button>
+      </form>
+    </section>
+  </div>
+  </div>
+
+</main>
+</body>
+</html>

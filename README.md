@@ -4,7 +4,7 @@
 
 Shared expenses for a household: who paid, who benefited, and who owes whom, correct to the cent.
 
-> **Status:** in development. The money model, split rules, ledger with balances, settlement suggestions, SQLite storage, corrections, and CSV export are done. See
+> **Status:** in development. The money model, split rules, ledger with balances, settlement suggestions, SQLite storage, corrections, CSV export, and a local web app are done. See
 > [`docs/design.md`](docs/design.md) for the plan and [`PROGRESS.md`](PROGRESS.md) for status.
 
 ## Setup
@@ -17,3 +17,12 @@ source .venv/bin/activate
 python -m pip install -e ".[dev]"
 python -m pytest
 ```
+
+## Run it
+
+```bash
+splitledger init house.db ana ben cal dee
+splitledger serve house.db
+```
+
+Then open http://127.0.0.1:8000. The API is documented at http://127.0.0.1:8000/docs.

@@ -124,6 +124,39 @@ apostrophe, so a description like `=HYPERLINK(...)` can't run as a formula when 
 opened (CSV injection). The file is UTF-8 with a byte-order mark, so Excel shows accented names
 correctly, and it is written atomically.
 
+## Interface
+
+`splitledger serve house.db` runs a FastAPI app on http://127.0.0.1:8000 with two faces:
+
+- **Household page** (`/`): balances, suggested payments with a "Mark as paid" button,
+  forms to add an expense or record a payment, and the history with a reverse option per entry.
+  Plain HTML forms, no JavaScript. Errors re-show the form with what was typed and a message.
+  A successful post redirects with 303 so refreshing never submits twice.
+- **JSON API** (`/api/...`, documented at `/docs`):
+
+| Method and path | Purpose |
+|---|---|
+| `GET /api/members`, `/api/balances`, `/api/entries` | Read the household |
+| `GET /api/statement/{member}` | One member's balance, line by line |
+| `GET /api/settlement` | Suggested payments and the method used |
+| `POST /api/expenses` | `{description, payer, amount, split: {type: equal / shares / exact, ...}}` |
+| `POST /api/reimbursements` | `{sender, receiver, amount, note}` |
+| `POST /api/entries/{id}/reverse` | `{reason}` |
+| `GET /export.csv` | The CSV export |
+
+Amounts are strings such as `"12.34"`. JSON numbers are rejected, because they arrive in Python
+as floats. Request bodies are strict: unknown fields and wrong types are errors. User mistakes
+are 422 with a message, a missing entry or member is 404, and a damaged file is 500.
+
+Each request opens its own SQLite connection, since a connection can't be shared across
+threads. Form handlers read the form asynchronously, then do all database work in one worker
+thread.
+
+**Security for a local app without accounts:** it listens only on 127.0.0.1; it rejects Host
+headers other than localhost (DNS rebinding); it refuses state-changing requests whose Origin is
+another site (CSRF); it grants no CORS; and templates escape all text, so a description like
+`<script>` is shown, not run.
+
 ## Tech choices
 
 | Choice | Why |
@@ -132,6 +165,7 @@ correctly, and it is written atomically.
 | `int` cents | Exact arithmetic, simple to store in SQLite as `INTEGER`. |
 | pytest + Hypothesis | Hypothesis generates many random expenses to try to break the invariants above. |
 | SQLite (`sqlite3`) | Built into Python, one file, transactions; no server or paid service. |
+| FastAPI + Jinja2 | Typed request validation, automatic API docs, server-rendered pages. Optional (`[web]` extra), so the core stays dependency-free. Pinned to releases at least two weeks old. |
 
 ## Milestones
 

@@ -12,11 +12,32 @@ license = "MIT"
 license-files = ["LICENSE"]
 dependencies = []
 
+[project.scripts]
+splitledger = "splitledger.cli:main"
+
 [project.optional-dependencies]
-dev = ["pytest>=9.1,<10", "hypothesis>=6.170,<7"]
+# The ledger core uses only the standard library; the web app is optional.
+# Versions were each released at least two weeks before they were pinned.
+web = [
+    "fastapi==0.142.2",
+    "starlette>=1.7,<1.8",
+    "pydantic>=2.13.5,<2.14",
+    "uvicorn==0.54.0",
+    "jinja2>=3.1.6,<4",
+    "python-multipart==0.0.32",
+]
+dev = [
+    "splitledger[web]",
+    "pytest>=9.1,<10",
+    "hypothesis>=6.170,<7",
+    "httpx2==2.13.1",  # Starlette's test client; plain httpx is deprecated there
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+splitledger = ["templates/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
